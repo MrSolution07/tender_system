@@ -1,0 +1,16 @@
+---
+description: Core project contract for the tender intelligence platform
+alwaysApply: true
+---
+
+# Tender platform
+
+South African government tender intelligence + transparency system. Group Major Tech.
+
+Read `docs/architecture/overview.md` and `docs/BUILD.md` before adding features. Source briefs are in `docs/references/`.
+
+- Monorepo: `apps/*` (not scaffolded yet), `packages/shared`, `docs/`, later `supabase/`.
+- Stack: Expo (two apps), Next.js dashboard, Supabase Postgres/Auth/RLS/Storage/Realtime, Node workers for AI and notifications.
+- Domain strings live in `@tender/shared`. Do not duplicate role or status literals.
+- Do not scaffold apps until the BUILD.md step for that app. Do not invent a custom REST CRUD API.
+- After code changes, run `graphify update .` if `graphify-out/` exists.

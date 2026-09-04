@@ -1,0 +1,21 @@
+---
+description: TypeScript conventions for this monorepo
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# TypeScript
+
+- `strict` plus `noUncheckedIndexedAccess`. No `any`. Narrow `unknown` at boundaries.
+- Import types and values from `@tender/shared` for roles and statuses.
+- Named exports. One domain concept per file in packages.
+- Do not catch-and-swallow. Log and rethrow a typed error at service edges.
+
+```ts
+// ❌
+status: string
+role: string
+
+// ✅
+import type { TenderStatus, AppRole } from "@tender/shared";
+```

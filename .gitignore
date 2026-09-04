@@ -1,0 +1,43 @@
+# dependencies
+node_modules
+.pnpm-store
+.npm
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# build
+dist
+build
+.next
+out
+.turbo
+.expo
+.expo-shared
+*.tsbuildinfo
+
+# logs / debug
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.DS_Store
+coverage
+.nyc_output
+
+# IDE
+.idea
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# supabase
+supabase/.temp
+supabase/.branches
+
+# generated
+packages/db/src/database.types.ts
+
+# os
+Thumbs.db

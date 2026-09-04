@@ -1,0 +1,18 @@
+---
+description: Architecture boundaries and build order
+alwaysApply: true
+---
+
+# Architecture
+
+Postgres is the single source of truth. Clients use the Supabase API. Workers handle AI and notifications. Edge Functions only glue events to workers.
+
+```
+draft → published → closed → evaluating → awarded → completed → archived
+```
+
+Use `canTransition` from `@tender/shared` plus a matching DB constraint/policy. No free-form status strings.
+
+Service names and ownership: `docs/architecture/services.md`. Client split: `docs/architecture/clients.md`. Target schema: `docs/architecture/schema.sql`.
+
+When adding a table, add it to schema.sql, enable RLS (fail closed), and extend `@tender/shared` if it introduces an enum.

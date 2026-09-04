@@ -1,0 +1,15 @@
+---
+description: Supabase schema, RLS, and client usage
+globs: supabase/**/*.sql,docs/architecture/schema.sql,**/supabase*.ts
+alwaysApply: false
+---
+
+# Supabase
+
+Verify current docs before copying old API shapes. Pin `supabase-js` versions.
+
+- New tables: PK uuid, `timestamptz`, FK indexes, RLS enabled in the same migration.
+- Grants: exposing a table to the Data API is separate from RLS. Grant deliberately.
+- Storage upsert needs INSERT + SELECT + UPDATE policies.
+- Generate types after schema changes; do not hand-write DB row types in apps.
+- Local first: `supabase start`, then hosted. Never commit `.env` or the service role.

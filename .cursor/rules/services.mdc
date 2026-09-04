@@ -1,0 +1,14 @@
+---
+description: Node AI and notification workers
+globs: apps/services/**
+alwaysApply: false
+---
+
+# Workers
+
+Long work lives here, not in Edge Functions.
+
+- `ai-document`: OCR optional → LLM → insert/update `ai_analyses`. Never auto-approve.
+- `notify`: Expo Push + Resend; optional SMS later. Idempotent on `(user_id, kind, entity_id)`.
+- Service role allowed only in this package and Edge Functions.
+- Time out and retry LLM calls. Persist failures on the analysis row; do not crash the worker loop.

@@ -1,0 +1,15 @@
+---
+description: Auth, RLS, secrets, and public-data boundary
+alwaysApply: true
+---
+
+# Security
+
+- Roles in `app_metadata` and `profiles.role`. Never authorise from `user_metadata`.
+- RLS on every `public` table. `TO authenticated` plus a row predicate — never role-only.
+- `UPDATE` policies need `USING` and `WITH CHECK`. UPDATE also needs a SELECT policy.
+- Views: `WITH (security_invoker = true)`. Avoid `SECURITY DEFINER` to bypass RLS.
+- Wrap `auth.uid()` as `(select auth.uid())` in policies.
+- Publishable key in clients. Service role only in workers / Edge Functions / CI.
+- Private storage buckets. Short-lived signed URLs. No public tender/bid files.
+- Public portal = transparency views only. Never bids, scores, evaluator comments, AI drafts, or official contact details.

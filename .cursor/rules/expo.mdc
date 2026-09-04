@@ -1,0 +1,15 @@
+---
+description: Expo mobile apps — internal and external
+globs: apps/mobile-internal/**,apps/mobile-external/**
+alwaysApply: false
+---
+
+# Expo
+
+Two apps. Do not merge them. Internal = staff. External = contractors + public.
+
+- Keep Expo managed workflow. No eject.
+- `EXPO_PUBLIC_SUPABASE_*` only. Never bundle the service role.
+- Subscribe to Realtime for tender/bid status; do not poll.
+- Gate screens by `profiles.role`. Still rely on RLS if someone tampers with the client.
+- Public browse on the external app works signed out (`anon` + transparency views).

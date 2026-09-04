@@ -1,0 +1,14 @@
+---
+description: Next.js web dashboard
+globs: apps/web/**
+alwaysApply: false
+---
+
+# Next.js dashboard
+
+App Router. Server Components for reads. Same Supabase project and RLS as mobile.
+
+- Browser client: publishable key only. No `SUPABASE_SERVICE_ROLE_KEY` in `NEXT_PUBLIC_*`.
+- Server-side Auth via `@supabase/ssr` cookie pattern when the app exists.
+- Recharts for pipeline / spend. Reuse `@tender/shared` status labels.
+- Do not add `getServerSideProps` (Pages Router).

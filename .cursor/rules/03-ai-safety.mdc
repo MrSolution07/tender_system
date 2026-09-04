@@ -1,0 +1,14 @@
+---
+description: AI output is advisory and requires human review
+alwaysApply: true
+---
+
+# AI safety
+
+The LLM summarises and extracts. It does not award tenders, score bids, or publish.
+
+- Worker writes `ai_analyses` only (`needs_review`). It does not update `tenders.closing_at`, requirements, or criteria.
+- Operational fields change only after a procurement officer sets `review_status` to `approved` or `corrected`.
+- Show AI text as "suggested" in the UI until reviewed.
+- Prompts must not ask the model to decide a winner or invent mandatory requirements that are not in the source document.
+- Log model name on `ai_analyses.model`. Treat extraction JSON as untrusted input.

@@ -1,0 +1,13 @@
+{
+  "name": "tender-system",
+  "private": true,
+  "packageManager": "pnpm@10.14.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "echo \"Scaffold apps first — see docs/BUILD.md\"",
+    "lint": "echo \"No apps yet\"",
+    "typecheck": "pnpm --filter @tender/shared exec tsc --noEmit -p tsconfig.json"
+  }
+}

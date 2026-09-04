@@ -1,0 +1,3 @@
+packages:
+  - "packages/*"
+  # Add "apps/*" after each app is scaffolded (see docs/BUILD.md).
