@@ -1,6 +1,6 @@
 # Government Tender Intelligence and Transparency Platform
 
-**Major Tech** — Christian Bulabula (st10538419) · Neo Yende (st10387834)  
+**Major Tech** — Christian Bulabula (st10538419) · Neo Yende (st10387834)  · Thembalethu Ndlovu (st10099281) 
 Lecturer: Mr T Tshesebe · 2026
 
 A procurement workspace for South African public-sector offices, and a public window onto what was awarded, to whom, and at what cost. Officials keep the decisions. Software keeps the record.
