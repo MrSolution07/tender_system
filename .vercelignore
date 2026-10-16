@@ -1,0 +1,10 @@
+node_modules
+.pnpm-store
+.next
+android
+ios
+dist
+.expo
+.gradle
+*.apk
+supabase/.temp

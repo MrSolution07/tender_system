@@ -1,0 +1,11 @@
+:root {
+  --canvas: #f4f7f8;
+  --surface: #ffffff;
+  --ink: #122027;
+  --muted: #3e5159;
+  --line: #d5e0e3;
+  --teal: #006e78;
+  --teal-ink: #f4fffe;
+  --highlight: #f26b1d;
+  --radius-token: 1rem;
+}

@@ -1,6 +1,6 @@
 # Supabase
 
-Not initialised. The **target schema** already exists at `docs/architecture/schema.sql`.
+Schema and seed live in this folder. `docs/architecture/schema.sql` is the same contract. Apply with `npx supabase db reset` locally, or `supabase db push` after `supabase link` to the hosted project.
 
 ```bash
 npx supabase init
