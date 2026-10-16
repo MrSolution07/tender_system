@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LifecycleRail } from "@/components/lifecycle-rail";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatRand } from "@/lib/format";
@@ -21,6 +22,9 @@ export default function HomePage() {
   }
 
   const open = tenders.filter((tender) => tender.status === "published");
+  const completed = awards.filter(
+    (award) => award.projectStatus === "completed",
+  );
   const spend = awards.reduce(
     (sum, award) =>
       sum + award.spend.reduce((inner, line) => inner + line.amountCents, 0),
@@ -30,7 +34,7 @@ export default function HomePage() {
   return (
     <>
       <section className="bg-primary text-primary-foreground">
-        <div className="band-enter mx-auto grid max-w-6xl gap-12 px-6 py-16 md:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.8fr)] md:py-24">
+        <div className="band-enter mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 md:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.9fr)] md:py-24">
           <div>
             <h1 className="font-display text-balance text-4xl font-semibold leading-tight md:text-6xl">
               What was published. What was awarded.
@@ -46,20 +50,12 @@ export default function HomePage() {
               <Link href="/tenders">Read open notices</Link>
             </Button>
           </div>
-          <dl className="grid content-end gap-8">
-            <div>
-              <dd className="font-display text-5xl font-semibold tabular-nums">
-                {open.length}
-              </dd>
-              <dt className="mt-1 text-primary-foreground/85">Open notices</dt>
-            </div>
-            <div>
-              <dd className="font-display text-5xl font-semibold tabular-nums">
-                {awards.length}
-              </dd>
-              <dt className="mt-1 text-primary-foreground/85">Awards on record</dt>
-            </div>
-          </dl>
+          <LifecycleRail
+            className="w-full max-w-sm md:justify-self-end"
+            openCount={open.length}
+            awardCount={awards.length}
+            completedCount={completed.length}
+          />
         </div>
       </section>
 
