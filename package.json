@@ -6,8 +6,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "echo \"Scaffold apps first — see docs/BUILD.md\"",
-    "lint": "echo \"No apps yet\"",
-    "typecheck": "pnpm --filter @tender/shared exec tsc --noEmit -p tsconfig.json"
+    "dev": "pnpm --filter @tender/web dev",
+    "lint": "pnpm --filter @tender/web lint",
+    "typecheck": "pnpm --filter @tender/shared exec tsc --noEmit -p tsconfig.json && pnpm --filter @tender/web exec tsc --noEmit -p tsconfig.json"
   }
 }
