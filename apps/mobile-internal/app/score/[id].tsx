@@ -1,53 +1,63 @@
-import { sampleEvaluations, tenderById } from "@tender/fixtures";
-import { Stack, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { Stack, router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 
-import {
-  Body,
-  Field,
-  PrimaryButton,
-  QuietButton,
-  Screen,
-  Title,
-} from "@/src/kit";
+import { Body, Field, FormError, PrimaryButton, QuietButton, Screen, Title } from "@/src/kit";
+import { loadEvaluations, saveScore, type DeskEvaluation } from "@/src/queries";
 
 export default function ScoreScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const evaluation =
-    typeof id === "string"
-      ? sampleEvaluations.find((item) => item.id === id)
-      : undefined;
-  const tender = evaluation ? tenderById(evaluation.tenderId) : undefined;
-  const [score, setScore] = useState(
-    evaluation?.score === null || evaluation?.score === undefined
-      ? ""
-      : String(evaluation.score),
-  );
-  const [comments, setComments] = useState(evaluation?.comments ?? "");
+  const [evaluation, setEvaluation] = useState<DeskEvaluation | null | undefined>(undefined);
+  const [score, setScore] = useState("");
+  const [comments, setComments] = useState("");
+  const [error, setError] = useState("");
 
-  if (!evaluation || !tender) {
+  useEffect(() => {
+    if (typeof id !== "string") {
+      setEvaluation(null);
+      return;
+    }
+    void loadEvaluations().then((rows) => {
+      const found = rows.find((item) => item.id === id) ?? null;
+      setEvaluation(found);
+      setScore(found?.score === null || found?.score === undefined ? "" : String(found.score));
+      setComments(found?.comments ?? "");
+    });
+  }, [id]);
+
+  if (!evaluation) {
     return (
       <Screen>
-        <Title>Score not in the sample</Title>
+        <Title>{evaluation === undefined ? "Loading the score." : "Score not found"}</Title>
         <QuietButton label="Back to scores" href="/scores" />
       </Screen>
     );
+  }
+
+  const current = evaluation;
+  async function save() {
+    const value = Number(score);
+    if (!Number.isFinite(value)) {
+      setError("Enter a numeric score.");
+      return;
+    }
+    const ok = await saveScore(current.id, value, comments);
+    if (!ok) {
+      setError("Could not save the score.");
+      return;
+    }
+    router.replace("/held?kind=score");
   }
 
   return (
     <Screen>
       <Stack.Screen options={{ title: "Score" }} />
       <Title>{evaluation.contractor}</Title>
-      <Body>{tender.title}</Body>
-      <Body>Scores stay on the desk. Save does not write them.</Body>
+      <Body>{evaluation.title}</Body>
+      <Body>Scores stay on the desk.</Body>
       <Field label="Score" value={score} onChangeText={setScore} />
-      <Field
-        label="Comments"
-        value={comments}
-        onChangeText={setComments}
-        multiline
-      />
-      <PrimaryButton label="Save score" href="/held?kind=score" />
+      <Field label="Comments" value={comments} onChangeText={setComments} multiline />
+      {error ? <FormError>{error}</FormError> : null}
+      <PrimaryButton label="Save score" onPress={() => void save()} />
     </Screen>
   );
 }

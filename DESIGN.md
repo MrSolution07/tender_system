@@ -80,4 +80,4 @@ shadcn on Radix, themed with the tokens above. Status is a badge. Destructive co
 
 ## Do's and Don'ts
 
-Do label sample data as a preview. Do keep bids, scores, evaluator notes, AI drafts, and contact details off the public site. Do mark model text Suggested until a person reviews it. Don't add a dark theme, a gradient, or a second accent on the same view. Don't use the FNB name or logo.
+Do keep bids, scores, evaluator notes, AI drafts, and contact details off the public site. Do mark model text Suggested until a person reviews it. Don't add a dark theme, a gradient, or a second accent on the same view. Don't use the FNB name or logo.

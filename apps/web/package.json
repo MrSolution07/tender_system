@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
     "@tender/shared": "workspace:*",
     "@tender/ui": "workspace:*",
     "class-variance-authority": "^0.7.1",

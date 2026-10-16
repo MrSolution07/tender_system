@@ -1,9 +1,5 @@
-import {
-  BID_STATUS_LABEL,
-  formatRand,
-  sampleBids,
-  tenderById,
-} from "@tender/fixtures";
+import { BID_STATUS_LABEL, formatRand } from "@tender/fixtures";
+import { useEffect, useState } from "react";
 
 import {
   ForestSub,
@@ -16,10 +12,21 @@ import {
   SectionTitle,
   Wordmark,
 } from "@/src/kit";
+import { loadMyBids, watchRegister, type LiveBid } from "@/src/queries";
 import { useSession } from "@/src/session";
 
 export default function BidsScreen() {
   const { session } = useSession();
+  const [bids, setBids] = useState<LiveBid[]>([]);
+
+  useEffect(() => {
+    if (!session) return;
+    const load = () => {
+      void loadMyBids().then(setBids);
+    };
+    load();
+    return watchRegister(load);
+  }, [session]);
 
   if (!session) {
     return (
@@ -35,32 +42,25 @@ export default function BidsScreen() {
         <SectionTitle>Sign in</SectionTitle>
         <SectionSub>
           Open notices can be read without an account. Bid rows appear after
-          the sample sign-in.
+          you sign in.
         </SectionSub>
         <PrimaryButton label="Sign in" href="/sign-in" />
       </HomeFrame>
     );
   }
 
-  const mine = sampleBids.filter((bid) => bid.contractor === session.company);
-
   return (
     <Page>
       <SectionTitle>Your bids</SectionTitle>
-      <SectionSub>
-        {session.company}. Sample bids. Sending a bid does not leave this phone.
-      </SectionSub>
-      {mine.map((bid) => {
-        const tender = tenderById(bid.tenderId);
-        return (
-          <Row
-            key={bid.id}
-            href={`/tender/${bid.tenderId}`}
-            title={tender?.title ?? "Tender"}
-            meta={`${BID_STATUS_LABEL[bid.status]}\n${formatRand(bid.amountCents)}`}
-          />
-        );
-      })}
+      <SectionSub>{session.company}</SectionSub>
+      {bids.map((bid) => (
+        <Row
+          key={bid.id}
+          href={`/tender/${bid.tenderId}`}
+          title={bid.title}
+          meta={`${BID_STATUS_LABEL[bid.status as keyof typeof BID_STATUS_LABEL] ?? bid.status}\n${formatRand(bid.amountCents)}`}
+        />
+      ))}
     </Page>
   );
 }

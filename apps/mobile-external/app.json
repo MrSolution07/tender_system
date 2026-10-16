@@ -11,6 +11,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "tech.major.tenders",
       "adaptiveIcon": {
         "backgroundColor": "#4BB179",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -33,10 +34,18 @@
           "resizeMode": "contain",
           "backgroundColor": "#4BB179"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": false
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5c70c409-81e9-48e9-9887-0cf65e952e95"
+      }
+    },
+    "owner": "solutioninc"
   }
 }

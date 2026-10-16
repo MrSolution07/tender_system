@@ -63,9 +63,10 @@ export default function RootLayout() {
 }
 
 function Gate({ children }: { children: ReactNode }) {
-  const { session } = useSession();
+  const { session, ready } = useSession();
   const segments = useSegments();
   const onSignIn = segments[0] === "sign-in";
+  if (!ready) return null;
   if (!session && !onSignIn) return <Redirect href="/sign-in" />;
   if (session && onSignIn) {
     return (

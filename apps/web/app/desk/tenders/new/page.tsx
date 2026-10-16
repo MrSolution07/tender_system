@@ -53,41 +53,37 @@ export default function NewTenderPage() {
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     if (!canSave) {
-      setSaveError("This preview role cannot save a draft. Switch to a procurement officer.");
+      setSaveError("Only a procurement officer can save a draft.");
       return;
     }
 
     setSaving(true);
-    window.setTimeout(() => {
-      try {
-        const tender = createTender({
-          title: title.trim(),
-          department: department.trim(),
-          category: category.trim(),
-          description: description.trim(),
-          budgetCents: Math.round(rands * 100),
-          closingAt: new Date(`${closingAt}T16:00:00`).toISOString(),
-        });
-        router.push(`/desk/tenders/${tender.id}`);
-      } catch {
+    void createTender({
+      title: title.trim(),
+      department: department.trim(),
+      category: category.trim(),
+      description: description.trim(),
+      budgetCents: Math.round(rands * 100),
+      closingAt: new Date(`${closingAt}T16:00:00`).toISOString(),
+    })
+      .then((tender) => router.push(`/desk/tenders/${tender.id}`))
+      .catch(() => {
         setSaving(false);
         setSaveError("Could not save this tender. Check the fields and try again.");
-      }
-    }, 400);
+      });
   }
 
   return (
     <div className="max-w-xl">
       <h1 className="font-display text-balance text-4xl font-semibold">New tender</h1>
       <p className="mt-3 text-pretty text-muted-foreground">
-        Saves a draft in this browser only. Nothing is published until you
-        change the status on the tender.
+        Saves a draft. Nothing is published until you change the status.
       </p>
       {!canSave ? (
         <Alert className="mt-6">
           <AlertTitle>This role cannot save a draft</AlertTitle>
           <AlertDescription>
-            Switch the preview to a procurement officer or a super admin.
+            Sign in as a procurement officer or a super admin.
           </AlertDescription>
         </Alert>
       ) : null}

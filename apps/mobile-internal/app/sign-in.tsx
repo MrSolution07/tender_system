@@ -1,13 +1,10 @@
-import { DESK_PEOPLE, ROLE_LABEL, type DeskRole } from "@tender/fixtures";
+import { router } from "expo-router";
 import { useRef, useState } from "react";
 import { TextInput } from "react-native";
 
 import {
-  Choice,
   Field,
   FormError,
-  Heading,
-  Meta,
   PrimaryButton,
   SectionSub,
   SectionTitle,
@@ -15,25 +12,8 @@ import {
 } from "@/src/kit";
 import { useSession } from "@/src/session";
 
-const SAMPLE_PASSWORD = "preview";
-
-const ACCOUNTS: { email: string; role: DeskRole }[] = [
-  {
-    email: "thandi.mokoena@majortech.example",
-    role: "procurement_officer",
-  },
-  {
-    email: "johan.pietersen@majortech.example",
-    role: "evaluator",
-  },
-  {
-    email: "ayesha.khan@majortech.example",
-    role: "super_admin",
-  },
-];
-
 export default function SignInScreen() {
-  const { enter } = useSession();
+  const { signIn } = useSession();
   const passwordRef = useRef<TextInput>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,32 +21,25 @@ export default function SignInScreen() {
   const [passwordError, setPasswordError] = useState("");
   const [formError, setFormError] = useState("");
 
-  function submit(nextEmail = email, nextPassword = password) {
-    const cleaned = nextEmail.trim().toLowerCase();
-    const nextEmailError = cleaned.includes("@") ? "" : "Enter a work email.";
-    const nextPasswordError = nextPassword ? "" : "Enter the password.";
+  async function submit() {
+    const nextEmailError = email.includes("@") ? "" : "Enter a work email.";
+    const nextPasswordError = password ? "" : "Enter the password.";
     setEmailError(nextEmailError);
     setPasswordError(nextPasswordError);
     setFormError("");
     if (nextEmailError || nextPasswordError) return;
-    const account = ACCOUNTS.find((item) => item.email === cleaned);
-    if (!account) {
-      setFormError("No sample account uses that email.");
+    const message = await signIn(email, password);
+    if (message) {
+      setFormError(message);
       return;
     }
-    if (nextPassword !== SAMPLE_PASSWORD) {
-      setFormError("That password does not match the sample account.");
-      return;
-    }
-    enter(account.role);
+    router.replace("/");
   }
 
   return (
     <SignInFrame product="Procurement desk">
       <SectionTitle>Sign in</SectionTitle>
-      <SectionSub>
-        Sample sign-in. Password is preview. Nothing is sent.
-      </SectionSub>
+      <SectionSub>Use your work email.</SectionSub>
       <Field
         label="Work email"
         value={email}
@@ -98,26 +71,10 @@ export default function SignInScreen() {
         autoCapitalize="none"
         inputRef={passwordRef}
         returnKeyType="done"
-        onSubmitEditing={() => submit()}
+        onSubmitEditing={() => void submit()}
       />
       {formError ? <FormError>{formError}</FormError> : null}
-      <PrimaryButton label="Sign in" onPress={() => submit()} />
-      <Heading>Sample accounts</Heading>
-      {ACCOUNTS.map((account) => (
-        <Choice
-          key={account.role}
-          title={DESK_PEOPLE[account.role]}
-          meta={`${ROLE_LABEL[account.role]}. ${account.email}`}
-          onPress={() => {
-            setEmail(account.email);
-            setPassword(SAMPLE_PASSWORD);
-            setEmailError("");
-            setPasswordError("");
-            setFormError("");
-          }}
-        />
-      ))}
-      <Meta>Fills the form. Sign in still has to be pressed.</Meta>
+      <PrimaryButton label="Sign in" onPress={() => void submit()} />
     </SignInFrame>
   );
 }

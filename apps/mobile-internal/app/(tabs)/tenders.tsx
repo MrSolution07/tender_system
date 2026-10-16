@@ -1,4 +1,4 @@
-import { EMPTY_CATEGORY, formatDate, sampleTenders, TENDER_STATUS_LABEL } from "@tender/fixtures";
+import { EMPTY_CATEGORY, formatDate, TENDER_STATUS_LABEL } from "@tender/fixtures";
 import {
   Anchor,
   Armchair,
@@ -10,7 +10,7 @@ import {
   Truck,
   type LucideIcon,
 } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
 
 import {
@@ -26,6 +26,7 @@ import {
   Wordmark,
   type TileTone,
 } from "@/src/kit";
+import { loadTenders, watchRegister, type DeskTender } from "@/src/queries";
 
 const TONES: TileTone[] = ["orange", "purple", "mint", "forest"];
 
@@ -54,11 +55,19 @@ export default function TendersScreen() {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [category, setCategory] = useState("All");
-  const categories = useMemo(() => {
-    const names = [...new Set(sampleTenders.map((tender) => tender.category))];
-    return [...names, EMPTY_CATEGORY];
+  const [tenders, setTenders] = useState<DeskTender[]>([]);
+  useEffect(() => {
+    const load = () => {
+      void loadTenders().then(setTenders);
+    };
+    load();
+    return watchRegister(load);
   }, []);
-  const rows = sampleTenders.filter((tender) => {
+  const categories = useMemo(() => {
+    const names = [...new Set(tenders.map((tender) => tender.category))];
+    return [...names, EMPTY_CATEGORY];
+  }, [tenders]);
+  const rows = tenders.filter((tender) => {
     const haystack = `${tender.title} ${tender.department}`.toLowerCase();
     const matchesQuery = haystack.includes(query.trim().toLowerCase());
     const matchesCategory = category === "All" || tender.category === category;
@@ -101,7 +110,7 @@ export default function TendersScreen() {
         <SectionTitle>Tenders</SectionTitle>
         <TextAction label="New draft" href="/tender/new" />
       </View>
-      <SectionSub>Every status on the sample register.</SectionSub>
+      <SectionSub>Every status on the register.</SectionSub>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -125,7 +134,7 @@ export default function TendersScreen() {
       </ScrollView>
       <View style={{ marginTop: 8 }}>
         {rows.length === 0 ? (
-          <SectionSub>No sample tenders match that filter.</SectionSub>
+          <SectionSub>No tenders match that filter.</SectionSub>
         ) : (
           rows.map((tender) => (
             <Row

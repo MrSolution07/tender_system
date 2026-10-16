@@ -106,7 +106,7 @@ function ScoreCard({
         </Button>
         {saved ? (
           <Alert>
-            <AlertTitle>Score saved in this preview</AlertTitle>
+            <AlertTitle>Score saved</AlertTitle>
             <AlertDescription>
               {Number(score) >= 50 ? "Marked compliant." : "Marked not compliant."}{" "}
               The public site does not show this.

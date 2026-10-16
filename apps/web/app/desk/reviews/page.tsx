@@ -46,9 +46,8 @@ export default function ReviewsPage() {
                   <Button
                     className="h-11"
                     onClick={() => {
-                      const ok = reviewSuggestion(review.id, "approved");
-                      setError(
-                        ok ? null : "This suggestion was already reviewed.",
+                      void reviewSuggestion(review.id, "approved").then((ok) =>
+                        setError(ok ? null : "This suggestion was already reviewed."),
                       );
                     }}
                   >
@@ -58,9 +57,8 @@ export default function ReviewsPage() {
                     variant="outline"
                     className="h-11"
                     onClick={() => {
-                      const ok = reviewSuggestion(review.id, "corrected");
-                      setError(
-                        ok ? null : "This suggestion was already reviewed.",
+                      void reviewSuggestion(review.id, "corrected").then((ok) =>
+                        setError(ok ? null : "This suggestion was already reviewed."),
                       );
                     }}
                   >

@@ -1,11 +1,7 @@
 import { TENDER_STATUSES } from "@tender/shared";
-import {
-  sampleEvaluations,
-  sampleTenders,
-  TENDER_STATUS_LABEL,
-} from "@tender/fixtures";
+import { TENDER_STATUS_LABEL } from "@tender/fixtures";
 import { Redirect } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 
 import {
@@ -22,6 +18,7 @@ import {
   TodayPill,
   WeekStrip,
 } from "@/src/kit";
+import { loadEvaluations, loadTenders, watchRegister, type DeskEvaluation, type DeskTender } from "@/src/queries";
 import { useSession } from "@/src/session";
 
 const LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -50,10 +47,10 @@ function weekContaining(date: Date) {
   });
 }
 
-function nextClosing(from: Date) {
+function nextClosing(from: Date, tenders: DeskTender[]) {
   const start = startOfDay(from).getTime();
   const upcoming: Date[] = [];
-  for (const tender of sampleTenders) {
+  for (const tender of tenders) {
     if (tender.status !== "published" || !tender.closingAt) continue;
     const date = new Date(tender.closingAt);
     if (date.getTime() >= start) upcoming.push(date);
@@ -77,7 +74,18 @@ function monthShort(iso: string) {
 export default function PipelineScreen() {
   const { session } = useSession();
   const today = startOfDay(new Date());
-  const [selected, setSelected] = useState(() => nextClosing(new Date()));
+  const [register, setRegister] = useState<DeskTender[]>([]);
+  const [evaluations, setEvaluations] = useState<DeskEvaluation[]>([]);
+  const [picked, setPicked] = useState<Date | null>(null);
+  useEffect(() => {
+    const load = () => {
+      void loadTenders().then(setRegister);
+      void loadEvaluations().then(setEvaluations);
+    };
+    load();
+    return watchRegister(load);
+  }, []);
+  const selected = picked ?? nextClosing(new Date(), register);
 
   if (session?.role === "evaluator") return <Redirect href="/scores" />;
 
@@ -87,15 +95,15 @@ export default function PipelineScreen() {
     month: "short",
     year: "numeric",
   });
-  const matches = sampleTenders.filter((tender) => {
+  const matches = register.filter((tender) => {
     if (!tender.closingAt) return false;
     return sameDay(new Date(tender.closingAt), selected);
   });
-  const later = sampleTenders.filter((tender) => {
+  const later = register.filter((tender) => {
     if (tender.status !== "published" || !tender.closingAt) return false;
     return startOfDay(new Date(tender.closingAt)).getTime() > selected.getTime();
   });
-  const unscored = sampleEvaluations.filter((item) => item.score === null);
+  const unscored = evaluations.filter((item) => item.score === null);
 
   return (
     <Page>
@@ -103,7 +111,7 @@ export default function PipelineScreen() {
         day={String(selected.getDate())}
         weekday={weekday}
         month={monthYear}
-        action={<TodayPill onPress={() => setSelected(today)} />}
+        action={<TodayPill onPress={() => setPicked(today)} />}
       />
       <WeekStrip
         days={days.map((day, index) => ({
@@ -112,11 +120,11 @@ export default function PipelineScreen() {
           date: day.getDate(),
           selected: sameDay(day, selected),
           label: day.toLocaleDateString("en-ZA", { dateStyle: "full" }),
-          onPress: () => setSelected(startOfDay(day)),
+          onPress: () => setPicked(startOfDay(day)),
         }))}
       />
       <Rule />
-      <SectionSub>Sample register. Nothing on this phone is saved.</SectionSub>
+      <SectionSub>Closing dates on the register.</SectionSub>
       <ColumnHead left="Closes" right="Tender" />
       {matches.length === 0 ? (
         <Meta>Nothing closes on this day.</Meta>
@@ -155,7 +163,7 @@ export default function PipelineScreen() {
         </View>
       ) : null}
       {TENDER_STATUSES.map((status) => {
-        const rows = sampleTenders.filter((tender) => tender.status === status);
+        const rows = register.filter((tender) => tender.status === status);
         if (rows.length === 0) return null;
         return (
           <View key={status}>

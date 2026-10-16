@@ -2,112 +2,42 @@
 
 import {
   canTransition,
+  TENDER_STATUSES,
   type AiReviewStatus,
+  type ProjectStatus,
   type TenderStatus,
 } from "@tender/shared";
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
-  useReducer,
   useState,
   type ReactNode,
 } from "react";
-import {
-  DESK_PEOPLE,
-  initialSampleState,
-  type DeskRole,
-  type SampleAward,
-  type SampleEvaluation,
-  type SampleReview,
-  type SampleState,
-  type SampleTender,
-} from "./sample-data";
 
-const STORAGE_KEY = "major-tech-sample-register";
-
-type Action =
-  | { type: "hydrate"; state: SampleState }
-  | { type: "reset" }
-  | { type: "sign-in"; role: DeskRole }
-  | { type: "sign-out" }
-  | { type: "set-status"; tenderId: string; status: TenderStatus }
-  | { type: "create-tender"; tender: SampleTender }
-  | {
-      type: "review";
-      reviewId: string;
-      status: Extract<AiReviewStatus, "approved" | "corrected">;
-    }
-  | { type: "score"; evaluationId: string; score: number; comments: string };
-
-function reducer(state: SampleState, action: Action): SampleState {
-  switch (action.type) {
-    case "hydrate":
-      return action.state;
-    case "reset":
-      return initialSampleState;
-    case "sign-in":
-      return {
-        ...state,
-        session: { role: action.role, name: DESK_PEOPLE[action.role] },
-      };
-    case "sign-out":
-      return { ...state, session: null };
-    case "set-status":
-      return {
-        ...state,
-        tenders: state.tenders.map((tender) => {
-          if (tender.id !== action.tenderId) return tender;
-          if (!canTransition(tender.status, action.status)) return tender;
-          const publishedAt =
-            action.status === "published" && tender.publishedAt === null
-              ? new Date().toISOString()
-              : tender.publishedAt;
-          return { ...tender, status: action.status, publishedAt };
-        }),
-      };
-    case "create-tender":
-      return { ...state, tenders: [action.tender, ...state.tenders] };
-    case "review":
-      return {
-        ...state,
-        reviews: state.reviews.map((review) =>
-          review.id === action.reviewId && review.reviewStatus === "needs_review"
-            ? { ...review, reviewStatus: action.status }
-            : review,
-        ),
-      };
-    case "score":
-      return {
-        ...state,
-        evaluations: state.evaluations.map((evaluation) =>
-          evaluation.id === action.evaluationId
-            ? {
-                ...evaluation,
-                score: action.score,
-                comments: action.comments,
-                compliancePass: action.score >= 50,
-              }
-            : evaluation,
-        ),
-      };
-    default:
-      return state;
-  }
-}
+import type {
+  AwardRecord,
+  DeskRole,
+  DeskSession,
+  EvaluationRecord,
+  ReviewRecord,
+  TenderRecord,
+} from "./register";
+import { createSupabase, hasSupabaseConfig } from "./supabase";
 
 type StoreValue = {
   ready: boolean;
-  tenders: SampleTender[];
-  reviews: SampleReview[];
-  awards: SampleAward[];
-  evaluations: SampleEvaluation[];
-  session: SampleState["session"];
-  signIn: (role: DeskRole) => void;
-  signOut: () => void;
-  resetSample: () => void;
-  setStatus: (tenderId: string, status: TenderStatus) => boolean;
+  error: string | null;
+  tenders: TenderRecord[];
+  reviews: ReviewRecord[];
+  awards: AwardRecord[];
+  evaluations: EvaluationRecord[];
+  session: DeskSession | null;
+  signIn: (email: string, password: string) => Promise<string | null>;
+  signOut: () => Promise<void>;
+  setStatus: (tenderId: string, status: TenderStatus) => Promise<boolean>;
   createTender: (input: {
     title: string;
     description: string;
@@ -115,100 +45,326 @@ type StoreValue = {
     department: string;
     budgetCents: number;
     closingAt: string;
-  }) => SampleTender;
+  }) => Promise<TenderRecord>;
   reviewSuggestion: (
     reviewId: string,
     status: Extract<AiReviewStatus, "approved" | "corrected">,
-  ) => boolean;
-  saveScore: (evaluationId: string, score: number, comments: string) => void;
+  ) => Promise<boolean>;
+  saveScore: (evaluationId: string, score: number, comments: string) => Promise<void>;
 };
 
 const StoreContext = createContext<StoreValue | null>(null);
 
-function isSampleState(value: unknown): value is SampleState {
-  if (typeof value !== "object" || value === null) return false;
-  const record = value as Record<string, unknown>;
+function text(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function num(value: unknown): number {
+  return typeof value === "number" ? value : Number(value) || 0;
+}
+
+function isStatus(value: unknown): value is TenderStatus {
+  return typeof value === "string" && (TENDER_STATUSES as readonly string[]).includes(value);
+}
+
+function isProjectStatus(value: unknown): value is ProjectStatus {
   return (
-    Array.isArray(record.tenders) &&
-    Array.isArray(record.reviews) &&
-    Array.isArray(record.awards) &&
-    Array.isArray(record.evaluations)
+    value === "not_started" ||
+    value === "in_progress" ||
+    value === "delayed" ||
+    value === "completed"
   );
 }
 
+function isReviewStatus(value: unknown): value is AiReviewStatus {
+  return (
+    value === "pending" ||
+    value === "processing" ||
+    value === "needs_review" ||
+    value === "approved" ||
+    value === "corrected"
+  );
+}
+
+function isDeskRole(value: unknown): value is DeskRole {
+  return (
+    value === "procurement_officer" ||
+    value === "evaluator" ||
+    value === "super_admin"
+  );
+}
+
+function one(value: unknown): Record<string, unknown> | null {
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return first && typeof first === "object" ? (first as Record<string, unknown>) : null;
+  }
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function many(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null);
+}
+
+function mapTender(row: Record<string, unknown>): TenderRecord | null {
+  if (!isStatus(row.status) || typeof row.id !== "string") return null;
+  return {
+    id: row.id,
+    title: text(row.title),
+    description: text(row.description),
+    category: text(row.category),
+    department: text(row.department),
+    budgetCents: num(row.budget_cents),
+    status: row.status,
+    publishedAt: typeof row.published_at === "string" ? row.published_at : null,
+    closingAt: typeof row.closing_at === "string" ? row.closing_at : null,
+    requirements: many(row.tender_requirements).flatMap((item) =>
+      typeof item.id === "string"
+        ? [{ id: item.id, body: text(item.body), mandatory: item.mandatory !== false }]
+        : [],
+    ),
+    documents: many(row.tender_documents).flatMap((item) =>
+      typeof item.id === "string"
+        ? [{ id: item.id, fileName: text(item.file_name) }]
+        : [],
+    ),
+  };
+}
+
+function mapReview(row: Record<string, unknown>): ReviewRecord | null {
+  if (typeof row.id !== "string" || typeof row.tender_id !== "string") return null;
+  if (!isReviewStatus(row.review_status)) return null;
+  return {
+    id: row.id,
+    tenderId: row.tender_id,
+    reviewStatus: row.review_status,
+    summary: text(row.summary),
+    model: text(row.model, "document-extractor"),
+  };
+}
+
+function mapAward(row: Record<string, unknown>): AwardRecord | null {
+  if (typeof row.id !== "string" || typeof row.tender_id !== "string") return null;
+  const contractor = one(row.contractors);
+  const project = one(row.projects);
+  const status = project && isProjectStatus(project.status) ? project.status : "not_started";
+  return {
+    id: row.id,
+    tenderId: row.tender_id,
+    contractor: text(contractor?.company_name, "Contractor"),
+    awardedAt: text(row.awarded_at),
+    projectTitle: text(project?.title, text(row.tender_id)),
+    projectStatus: status,
+    progressPercent: num(project?.progress_percent),
+    locationLabel: text(project?.location_label),
+    spend: many(project?.expenditure).flatMap((line) =>
+      typeof line.id === "string"
+        ? [{ id: line.id, label: text(line.description, "Spend"), amountCents: num(line.amount_cents) }]
+        : [],
+    ),
+  };
+}
+
+function mapEvaluation(row: Record<string, unknown>): EvaluationRecord | null {
+  if (typeof row.id !== "string") return null;
+  const bid = one(row.bids);
+  const contractor = one(bid?.contractors);
+  if (!bid || typeof bid.tender_id !== "string") return null;
+  return {
+    id: row.id,
+    tenderId: bid.tender_id,
+    contractor: text(contractor?.company_name, "Contractor"),
+    score: typeof row.score === "number" ? row.score : row.score === null ? null : num(row.score),
+    comments: text(row.comments),
+    compliancePass: typeof row.compliance_pass === "boolean" ? row.compliance_pass : null,
+  };
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialSampleState);
+  const supabase = useMemo(() => (hasSupabaseConfig() ? createSupabase() : null), []);
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [tenders, setTenders] = useState<TenderRecord[]>([]);
+  const [reviews, setReviews] = useState<ReviewRecord[]>([]);
+  const [awards, setAwards] = useState<AwardRecord[]>([]);
+  const [evaluations, setEvaluations] = useState<EvaluationRecord[]>([]);
+  const [session, setSession] = useState<DeskSession | null>(null);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed: unknown = JSON.parse(raw);
-        if (isSampleState(parsed)) {
-          dispatch({ type: "hydrate", state: parsed });
-        }
-      }
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
+  const load = useCallback(async () => {
+    if (!supabase) {
+      setError("The register is not configured.");
+      setReady(true);
+      return;
     }
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user;
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, full_name")
+        .eq("id", user.id)
+        .maybeSingle();
+      const role = profile && isDeskRole(profile.role) ? profile.role : null;
+      setSession(
+        role
+          ? { role, name: text(profile?.full_name, user.email ?? "Staff") }
+          : null,
+      );
+    } else {
+      setSession(null);
+    }
+
+    const [tenderRes, reviewRes, awardRes, evaluationRes] = await Promise.all([
+      supabase
+        .from("tenders")
+        .select("id,title,description,category,department,budget_cents,status,published_at,closing_at,tender_requirements(id,body,mandatory),tender_documents(id,file_name)")
+        .order("closing_at", { ascending: true }),
+      supabase.from("ai_analyses").select("id,tender_id,review_status,summary,model"),
+      supabase
+        .from("awards")
+        .select("id,tender_id,awarded_at,contractors(company_name),projects(title,status,progress_percent,location_label,expenditure(id,description,amount_cents))"),
+      supabase
+        .from("evaluations")
+        .select("id,score,comments,compliance_pass,bids(tender_id,contractors(company_name))"),
+    ]);
+    const staffMiss = Boolean(user) && (reviewRes.error ?? evaluationRes.error);
+    const failure = tenderRes.error ?? awardRes.error ?? staffMiss;
+    setError(failure ? "The register could not be loaded." : null);
+    setTenders(many(tenderRes.data).flatMap((row) => {
+      const tender = mapTender(row);
+      return tender ? [tender] : [];
+    }));
+    setReviews(reviewRes.error ? [] : many(reviewRes.data).flatMap((row) => {
+      const review = mapReview(row);
+      return review ? [review] : [];
+    }));
+    setAwards(many(awardRes.data).flatMap((row) => {
+      const award = mapAward(row);
+      return award ? [award] : [];
+    }));
+    setEvaluations(evaluationRes.error ? [] : many(evaluationRes.data).flatMap((row) => {
+      const evaluation = mapEvaluation(row);
+      return evaluation ? [evaluation] : [];
+    }));
     setReady(true);
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
-    if (!ready) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // Preview storage can fill up. The in-memory register still works.
+    void load();
+    if (!supabase) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        void load();
+      }, 200);
+    };
+    const channel = supabase.channel("register");
+    for (const table of ["tenders", "awards", "projects", "expenditure", "bids", "evaluations", "ai_analyses"]) {
+      channel.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
     }
-  }, [ready, state]);
+    channel.subscribe();
+    const auth = supabase.auth.onAuthStateChange(() => {
+      void load();
+    });
+    return () => {
+      clearTimeout(timer);
+      void supabase.removeChannel(channel);
+      auth.data.subscription.unsubscribe();
+    };
+  }, [load, supabase]);
 
   const value = useMemo<StoreValue>(
     () => ({
       ready,
-      tenders: state.tenders,
-      reviews: state.reviews,
-      awards: state.awards,
-      evaluations: state.evaluations,
-      session: state.session,
-      signIn: (role) => dispatch({ type: "sign-in", role }),
-      signOut: () => dispatch({ type: "sign-out" }),
-      resetSample: () => dispatch({ type: "reset" }),
-      setStatus: (tenderId, status) => {
-        const tender = state.tenders.find((item) => item.id === tenderId);
-        if (!tender || !canTransition(tender.status, status)) return false;
-        dispatch({ type: "set-status", tenderId, status });
+      error,
+      tenders,
+      reviews,
+      awards,
+      evaluations,
+      session,
+      signIn: async (email, password) => {
+        if (!supabase) return "The register is not configured.";
+        const { error: signError } = await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password,
+        });
+        if (signError) return "Email or password is wrong.";
+        await load();
+        return null;
+      },
+      signOut: async () => {
+        if (!supabase) return;
+        await supabase.auth.signOut();
+        setSession(null);
+      },
+      setStatus: async (tenderId, status) => {
+        const tender = tenders.find((item) => item.id === tenderId);
+        if (!tender || !canTransition(tender.status, status) || !supabase) return false;
+        const { error: updateError } = await supabase
+          .from("tenders")
+          .update({ status })
+          .eq("id", tenderId);
+        if (updateError) return false;
+        await load();
         return true;
       },
-      createTender: (input) => {
-        const tender: SampleTender = {
-          id: `t-${crypto.randomUUID()}`,
-          title: input.title,
-          description: input.description,
-          category: input.category,
-          department: input.department,
-          budgetCents: input.budgetCents,
-          status: "draft",
-          publishedAt: null,
-          closingAt: input.closingAt,
-          requirements: [],
-          documents: [],
-        };
-        dispatch({ type: "create-tender", tender });
+      createTender: async (input) => {
+        if (!supabase) throw new Error("The register is not configured.");
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData.user) throw new Error("Sign in again.");
+        const { data, error: insertError } = await supabase
+          .from("tenders")
+          .insert({
+            title: input.title,
+            description: input.description,
+            category: input.category,
+            department: input.department,
+            budget_cents: input.budgetCents,
+            closing_at: input.closingAt,
+            created_by: userData.user.id,
+            status: "draft",
+          })
+          .select("id,title,description,category,department,budget_cents,status,published_at,closing_at")
+          .single();
+        if (insertError || !data) throw new Error("Could not save this tender.");
+        const tender = mapTender(data as Record<string, unknown>);
+        if (!tender) throw new Error("Could not save this tender.");
+        await load();
         return tender;
       },
-      reviewSuggestion: (reviewId, status) => {
-        const review = state.reviews.find((item) => item.id === reviewId);
-        if (!review || review.reviewStatus !== "needs_review") return false;
-        dispatch({ type: "review", reviewId, status });
+      reviewSuggestion: async (reviewId, status) => {
+        if (!supabase) return false;
+        const { data: userData } = await supabase.auth.getUser();
+        const { error: updateError } = await supabase
+          .from("ai_analyses")
+          .update({
+            review_status: status,
+            reviewed_at: new Date().toISOString(),
+            reviewed_by: userData.user?.id ?? null,
+          })
+          .eq("id", reviewId)
+          .eq("review_status", "needs_review");
+        if (updateError) return false;
+        await load();
         return true;
       },
-      saveScore: (evaluationId, score, comments) => {
-        dispatch({ type: "score", evaluationId, score, comments });
+      saveScore: async (evaluationId, score, comments) => {
+        if (!supabase) throw new Error("The register is not configured.");
+        const { error: updateError } = await supabase
+          .from("evaluations")
+          .update({
+            score,
+            comments,
+            compliance_pass: score >= 50,
+          })
+          .eq("id", evaluationId);
+        if (updateError) throw new Error("Could not save the score.");
+        await load();
       },
     }),
-    [ready, state],
+    [awards, error, evaluations, load, ready, reviews, session, supabase, tenders],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
@@ -216,8 +372,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
 export function useStore(): StoreValue {
   const value = useContext(StoreContext);
-  if (!value) {
-    throw new Error("useStore must be used inside StoreProvider");
-  }
+  if (!value) throw new Error("useStore must be used inside StoreProvider");
   return value;
 }

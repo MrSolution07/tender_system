@@ -40,8 +40,7 @@ export default function HomePage() {
               What was published. What was awarded.
             </h1>
             <p className="mt-6 max-w-[62ch] text-pretty text-lg text-primary-foreground/90">
-              Major Tech shows the public record of government tenders. The
-              figures below are sample data from a fictional register.
+              Major Tech shows the public record of government tenders.
             </p>
             <Button
               asChild
@@ -89,7 +88,7 @@ export default function HomePage() {
             {formatRand(spend)}
           </p>
           <p className="mt-2 max-w-[62ch] text-pretty text-muted-foreground">
-            Spend lines on awarded sample projects. Bids, scores, and evaluator
+            Spend recorded on awarded projects. Bids, scores, and evaluator
             notes stay off this site.
           </p>
           <div className="mt-8">
@@ -116,7 +115,7 @@ function NoticeList({
   if (rows.length === 0) {
     return (
       <p className="text-muted-foreground">
-        No open notices in the sample register.{" "}
+        No open notices.{" "}
         <Link href="/awards" className="font-semibold text-primary">
           Read awards
         </Link>

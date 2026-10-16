@@ -154,8 +154,8 @@ export default function PipelinePage() {
         Good day, {givenName}
       </h1>
       <p className="mt-2 max-w-[62ch] text-pretty text-muted-foreground">
-        Where the sample tenders sit, what closes this week, and which scores
-        are still open.
+        Where tenders sit, what closes this week, and which scores are still
+        open.
       </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -184,7 +184,7 @@ export default function PipelinePage() {
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h2 className="font-display text-xl font-semibold">Pipeline by status</h2>
           <p className="text-sm text-muted-foreground">
-            {tenders.length} sample tenders, in lifecycle order
+            {tenders.length} tenders, in lifecycle order
           </p>
         </div>
         <div className="mt-4">
@@ -241,7 +241,7 @@ export default function PipelinePage() {
           }
         >
           {unscored.length === 0 ? (
-            <EmptyState icon={CheckCircle2} text="Every sample bid has a score." />
+            <EmptyState icon={CheckCircle2} text="Every assigned bid has a score." />
           ) : (
             <ul className="divide-y divide-border">
               {unscored.map((item) => {

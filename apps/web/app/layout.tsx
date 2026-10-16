@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: "%s · Major Tech",
   },
   description:
-    "Published tender notices and awards. The desk behind them is a preview with sample data.",
+    "Published tender notices and awards from the Major Tech register.",
 };
 
 export default function RootLayout({

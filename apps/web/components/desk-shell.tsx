@@ -1,6 +1,6 @@
 "use client";
 
-import type { DeskRole } from "@/lib/sample-data";
+import type { DeskRole } from "@/lib/register";
 import { ROLE_LABEL } from "@/lib/labels";
 import { useStore } from "@/lib/store";
 import {
@@ -12,7 +12,6 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  RotateCcw,
   ShieldCheck,
   Sparkles,
   type LucideIcon,
@@ -141,7 +140,7 @@ function RoleBadge({ role, className }: { role: DeskRole; className?: string }) 
 export function DeskShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { ready, session, signOut, resetSample } = useStore();
+  const { ready, session, signOut } = useStore();
   const onSignIn = pathname === "/desk/sign-in";
 
   useEffect(() => {
@@ -265,27 +264,17 @@ export function DeskShell({ children }: { children: ReactNode }) {
                     {session.name}
                   </span>
                   <span className="text-xs font-normal text-muted-foreground">
-                    {ROLE_LABEL[session.role]} · preview session
+                    {ROLE_LABEL[session.role]}
                   </span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onSelect={() => {
-                    resetSample();
-                    router.push("/desk/sign-in");
-                  }}
-                >
-                  <RotateCcw strokeWidth={1.5} aria-hidden="true" />
-                  Reset sample data
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => {
-                    signOut();
-                    router.push("/desk/sign-in");
+                    void signOut().then(() => router.push("/desk/sign-in"));
                   }}
                 >
                   <LogOut strokeWidth={1.5} aria-hidden="true" />
-                  Leave preview
+                  Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -303,11 +292,7 @@ export function DeskShell({ children }: { children: ReactNode }) {
               aria-hidden="true"
             />
             <p className="text-pretty text-sm text-foreground">
-              <strong className="font-semibold text-primary-deep">
-                Preview, not a real sign-in.
-              </strong>{" "}
-              You are {session.name}, {ROLE_LABEL[session.role]}. Sample data
-              only, nothing here is saved to a server.
+              You are {session.name}, {ROLE_LABEL[session.role]}.
             </p>
           </div>
         </div>

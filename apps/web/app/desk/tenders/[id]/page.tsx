@@ -46,7 +46,7 @@ export default function DeskTenderPage() {
   if (!tender) {
     return (
       <div>
-        <h1 className="font-display text-3xl font-semibold">Tender not in the sample</h1>
+        <h1 className="font-display text-3xl font-semibold">Tender not found</h1>
         <Button asChild className="mt-6 h-11">
           <Link href="/desk/tenders">Back to tenders</Link>
         </Button>
@@ -57,12 +57,12 @@ export default function DeskTenderPage() {
   const current = tender;
   const nextStatuses = TENDER_TRANSITIONS[current.status];
 
-  function move(status: TenderStatus) {
+  async function move(status: TenderStatus) {
     if (status === "published" && !current.closingAt) {
       setStatusError("Add a closing date before publishing.");
       return;
     }
-    const ok = setStatus(current.id, status);
+    const ok = await setStatus(current.id, status);
     setStatusError(ok ? null : "That status change is not allowed from here.");
   }
 
@@ -146,8 +146,8 @@ export default function DeskTenderPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Archive this tender?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Archived tenders leave the active pipeline. This preview can
-                    still show them under the archived filter.
+                    Archived tenders leave the active pipeline. They stay on the
+                    register under the archived filter.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

@@ -45,8 +45,7 @@ export function PublicFooter() {
 
       <div className="border-t border-primary-foreground/15">
         <p className="mx-auto max-w-6xl px-6 py-5 text-sm text-primary-foreground/75">
-          Sample register with fictional departments and contractors. Not a live
-          procurement system.
+          Major Tech government tender register.
         </p>
       </div>
     </footer>

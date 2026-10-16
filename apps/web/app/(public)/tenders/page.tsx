@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate, formatRand } from "@/lib/format";
-import { EMPTY_CATEGORY } from "@/lib/sample-data";
+import { EMPTY_CATEGORY } from "@/lib/register";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 

@@ -1,4 +1,4 @@
-import { EMPTY_CATEGORY, sampleTenders } from "@tender/fixtures";
+import { EMPTY_CATEGORY } from "@tender/fixtures";
 import {
   Anchor,
   Armchair,
@@ -10,7 +10,7 @@ import {
   Truck,
   type LucideIcon,
 } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
 
 import {
@@ -27,6 +27,7 @@ import {
   Wordmark,
   type TileTone,
 } from "@/src/kit";
+import { loadPublishedTenders, watchRegister, type LiveTender } from "@/src/queries";
 
 const TONES: TileTone[] = ["orange", "purple", "mint", "forest"];
 
@@ -63,18 +64,19 @@ export default function NoticesScreen() {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [category, setCategory] = useState("All");
-  const categories = useMemo(() => {
-    const names = [
-      ...new Set(
-        sampleTenders
-          .filter((tender) => tender.status === "published")
-          .map((tender) => tender.category),
-      ),
-    ];
-    return [...names, EMPTY_CATEGORY];
+  const [published, setPublished] = useState<LiveTender[]>([]);
+  useEffect(() => {
+    const load = () => {
+      void loadPublishedTenders().then(setPublished);
+    };
+    load();
+    return watchRegister(load);
   }, []);
-  const rows = sampleTenders
-    .filter((tender) => tender.status === "published")
+  const categories = useMemo(() => {
+    const names = [...new Set(published.map((tender) => tender.category))];
+    return [...names, EMPTY_CATEGORY];
+  }, [published]);
+  const rows = published
     .filter((tender) => {
       const haystack = `${tender.title} ${tender.department}`.toLowerCase();
       const matchesQuery = haystack.includes(query.trim().toLowerCase());
@@ -117,7 +119,7 @@ export default function NoticesScreen() {
       }
     >
       <SectionTitle>Open notices</SectionTitle>
-      <SectionSub>Published for bid on the sample register.</SectionSub>
+      <SectionSub>Published for bid.</SectionSub>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -141,7 +143,7 @@ export default function NoticesScreen() {
       </ScrollView>
       <View style={{ height: 28 }} />
       <SectionTitle>Closing next</SectionTitle>
-      <SectionSub>Dates on the sample register.</SectionSub>
+      <SectionSub>Closing dates on the register.</SectionSub>
       {rows.length === 0 ? (
         <Meta>No open notices match that filter.</Meta>
       ) : (
