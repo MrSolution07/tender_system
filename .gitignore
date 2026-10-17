@@ -16,6 +16,7 @@ out
 .turbo
 .expo
 .expo-shared
+.vercel
 *.tsbuildinfo
 
 # logs / debug

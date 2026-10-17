@@ -65,23 +65,12 @@ create type public.project_status as enum (
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = now();
   return new;
 end;
-$$;
-
--- Role from profiles (source of truth), not user_metadata.
-create or replace function public.current_app_role()
-returns public.app_role
-language sql
-stable
-security invoker
-as $$
-  select p.role
-  from public.profiles p
-  where p.id = (select auth.uid());
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -95,6 +84,21 @@ create table public.profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Role from profiles (source of truth), not user_metadata.
+-- Definer so policies that call this do not recurse through profiles RLS.
+-- Created after profiles so the SQL body can resolve the table.
+create or replace function public.current_app_role()
+returns public.app_role
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.role
+  from public.profiles p
+  where p.id = (select auth.uid());
+$$;
 
 create table public.contractors (
   id uuid primary key default gen_random_uuid(),
@@ -190,6 +194,7 @@ create table public.bids (
   tender_id uuid not null references public.tenders (id) on delete restrict,
   contractor_id uuid not null references public.contractors (id) on delete restrict,
   amount_cents bigint,
+  note text,
   status public.bid_status not null default 'draft',
   submitted_at timestamptz,
   created_at timestamptz not null default now(),
@@ -245,6 +250,7 @@ create table public.awards (
   id uuid primary key default gen_random_uuid(),
   tender_id uuid not null unique references public.tenders (id),
   bid_id uuid not null unique references public.bids (id),
+  contractor_id uuid references public.contractors (id),
   awarded_by uuid not null references public.profiles (id),
   awarded_at timestamptz not null default now(),
   notes text
@@ -316,13 +322,14 @@ select
   t.currency,
   a.awarded_at,
   c.company_name as contractor_name,
+  p.id as project_id,
+  p.title as project_title,
   p.status as project_status,
   p.progress_percent,
   p.location_label
 from public.tenders t
 join public.awards a on a.tender_id = t.id
-join public.bids b on b.id = a.bid_id
-join public.contractors c on c.id = b.contractor_id
+join public.contractors c on c.id = a.contractor_id
 left join public.projects p on p.award_id = a.id
 where t.status in ('awarded', 'completed');
 
@@ -350,9 +357,202 @@ for each row execute function public.set_updated_at();
 create trigger projects_updated_at before update on public.projects
 for each row execute function public.set_updated_at();
 
+-- Published notices the public may read. No bids, scores, or contact details.
+create view public.published_tenders_public
+with (security_invoker = true) as
+select
+  id,
+  title,
+  description,
+  category,
+  department,
+  budget_cents,
+  currency,
+  status,
+  published_at,
+  closing_at
+from public.tenders
+where status = 'published';
+
 -- ---------------------------------------------------------------------------
--- RLS: enable everywhere. Policies are the authorisation model.
--- Tighten predicates as features land; do not ship tables without RLS.
+-- Role helpers used by policies. security invoker so RLS still applies.
+-- ---------------------------------------------------------------------------
+create or replace function public.is_staff()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select public.current_app_role() in ('super_admin', 'procurement_officer', 'evaluator');
+$$;
+
+create or replace function public.is_officer()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select public.current_app_role() in ('super_admin', 'procurement_officer');
+$$;
+
+create or replace function public.enforce_tender_transition()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if auth.uid() is null or old.status is not distinct from new.status then
+    return new;
+  end if;
+  if not (
+    (old.status = 'draft' and new.status in ('published', 'archived'))
+    or (old.status = 'published' and new.status in ('closed', 'archived'))
+    or (old.status = 'closed' and new.status in ('evaluating', 'archived'))
+    or (old.status = 'evaluating' and new.status in ('awarded', 'archived'))
+    or (old.status = 'awarded' and new.status in ('completed', 'archived'))
+    or (old.status = 'completed' and new.status = 'archived')
+  ) then
+    raise exception 'status change from % to % is not allowed', old.status, new.status;
+  end if;
+  if new.status = 'published' and new.published_at is null then
+    new.published_at = now();
+  end if;
+  return new;
+end;
+$$;
+
+create trigger tenders_status_transition
+before update on public.tenders
+for each row execute function public.enforce_tender_transition();
+
+create or replace function public.enforce_bid_window()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  tender_status public.tender_status;
+  tender_closes timestamptz;
+begin
+  if auth.uid() is null then
+    return new;
+  end if;
+  if tg_op = 'UPDATE' and old.status is not distinct from new.status then
+    return new;
+  end if;
+  if new.status <> 'submitted' then
+    return new;
+  end if;
+  select status, closing_at into tender_status, tender_closes
+  from public.tenders
+  where id = new.tender_id;
+  if tender_status is distinct from 'published' or tender_closes is null or tender_closes < now() then
+    raise exception 'This notice is not open for bids';
+  end if;
+  new.submitted_at = coalesce(new.submitted_at, now());
+  return new;
+end;
+$$;
+
+create trigger bids_window
+before insert or update on public.bids
+for each row execute function public.enforce_bid_window();
+
+create or replace function public.copy_award_contractor()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  select b.contractor_id into new.contractor_id
+  from public.bids b
+  where b.id = new.bid_id;
+  return new;
+end;
+$$;
+
+create trigger awards_contractor
+before insert or update of bid_id on public.awards
+for each row execute function public.copy_award_contractor();
+
+create or replace function public.notify_bid_submitted()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  officer uuid;
+  tender_title text;
+begin
+  if auth.uid() is null then
+    return new;
+  end if;
+  if tg_op = 'UPDATE' and old.status = 'submitted' then
+    return new;
+  end if;
+  if new.status <> 'submitted' then
+    return new;
+  end if;
+  select title, created_by into tender_title, officer
+  from public.tenders
+  where id = new.tender_id;
+  insert into public.notifications (user_id, title, body, kind)
+  values (officer, 'Bid submitted', tender_title, 'bid_submitted');
+  return new;
+end;
+$$;
+
+create trigger bids_notify
+after insert or update on public.bids
+for each row execute function public.notify_bid_submitted();
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  assigned public.app_role;
+begin
+  begin
+    assigned := nullif(new.raw_app_meta_data->>'role', '')::public.app_role;
+  exception
+    when invalid_text_representation then
+      assigned := null;
+  end;
+  if assigned is null then
+    return new;
+  end if;
+  insert into public.profiles (id, role, full_name, department)
+  values (
+    new.id,
+    assigned,
+    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    nullif(new.raw_user_meta_data->>'department', '')
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_new_user();
+
+revoke all on function public.handle_new_user() from public;
+revoke all on function public.copy_award_contractor() from public;
+revoke all on function public.notify_bid_submitted() from public;
+revoke all on function public.current_app_role() from public;
+grant execute on function public.handle_new_user() to supabase_auth_admin;
+grant execute on function public.current_app_role() to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- RLS
 -- ---------------------------------------------------------------------------
 alter table public.profiles enable row level security;
 alter table public.contractors enable row level security;
@@ -372,21 +572,30 @@ alter table public.expenditure enable row level security;
 alter table public.notifications enable row level security;
 alter table public.audit_logs enable row level security;
 
--- Profiles: users read self; staff read staff; super_admin writes roles.
-create policy profiles_select_self on public.profiles
+create policy profiles_select on public.profiles
 for select to authenticated
-using (id = (select auth.uid()) or public.current_app_role() in ('super_admin', 'procurement_officer', 'evaluator'));
+using (
+  id = (select auth.uid())
+  or public.is_staff()
+);
 
 create policy profiles_update_self on public.profiles
 for update to authenticated
 using (id = (select auth.uid()))
 with check (id = (select auth.uid()) and role = public.current_app_role());
 
--- Tenders: staff manage; contractors see published+; anon uses awarded_tenders_public.
-create policy tenders_staff_all on public.tenders
-for all to authenticated
-using (public.current_app_role() in ('super_admin', 'procurement_officer', 'evaluator'))
-with check (public.current_app_role() in ('super_admin', 'procurement_officer'));
+create policy tenders_staff_select on public.tenders
+for select to authenticated
+using (public.is_staff());
+
+create policy tenders_officer_write on public.tenders
+for insert to authenticated
+with check (public.is_officer() and created_by = (select auth.uid()));
+
+create policy tenders_officer_update on public.tenders
+for update to authenticated
+using (public.is_officer())
+with check (public.is_officer());
 
 create policy tenders_contractor_select on public.tenders
 for select to authenticated
@@ -395,7 +604,78 @@ using (
   and status in ('published', 'closed', 'evaluating', 'awarded', 'completed')
 );
 
--- Bids: contractor owns own rows; assigned evaluators and officers read.
+create policy tenders_anon_published on public.tenders
+for select to anon
+using (status in ('published', 'awarded', 'completed'));
+
+create policy contractors_select on public.contractors
+for select to anon, authenticated
+using (
+  profile_id = (select auth.uid())
+  or public.is_staff()
+  or id in (
+    select a.contractor_id
+    from public.awards a
+    join public.tenders t on t.id = a.tender_id
+    where a.contractor_id is not null
+      and t.status in ('awarded', 'completed')
+  )
+);
+
+create policy contractors_officer_write on public.contractors
+for insert to authenticated
+with check (public.is_officer() or profile_id = (select auth.uid()));
+
+create policy contractors_owner_update on public.contractors
+for update to authenticated
+using (profile_id = (select auth.uid()) or public.is_officer())
+with check (profile_id = (select auth.uid()) or public.is_officer());
+
+create policy tender_documents_read on public.tender_documents
+for select to anon, authenticated
+using (
+  public.is_staff()
+  or tender_id in (
+    select t.id from public.tenders t
+    where t.status in ('published', 'closed', 'evaluating', 'awarded', 'completed')
+  )
+);
+
+create policy tender_documents_officer_write on public.tender_documents
+for insert to authenticated
+with check (public.is_officer() and uploaded_by = (select auth.uid()));
+
+create policy tender_requirements_read on public.tender_requirements
+for select to anon, authenticated
+using (
+  public.is_staff()
+  or tender_id in (
+    select t.id from public.tenders t
+    where t.status in ('published', 'awarded', 'completed')
+  )
+);
+
+create policy tender_requirements_officer_write on public.tender_requirements
+for insert to authenticated
+with check (public.is_officer());
+
+create policy criteria_staff on public.evaluation_criteria
+for select to authenticated
+using (public.is_staff());
+
+create policy criteria_officer_write on public.evaluation_criteria
+for insert to authenticated
+with check (public.is_officer());
+
+create policy ai_staff_select on public.ai_analyses
+for select to authenticated
+using (public.is_staff());
+
+create policy ai_officer_update on public.ai_analyses
+for update to authenticated
+using (public.is_officer())
+with check (public.is_officer());
+
 create policy bids_contractor_own on public.bids
 for all to authenticated
 using (
@@ -413,16 +693,139 @@ with check (
 
 create policy bids_staff_select on public.bids
 for select to authenticated
-using (public.current_app_role() in ('super_admin', 'procurement_officer', 'evaluator'));
+using (public.is_staff());
 
--- Notifications: recipient only.
+create policy bid_documents_parties on public.bid_documents
+for select to authenticated
+using (
+  public.is_staff()
+  or bid_id in (
+    select b.id from public.bids b
+    join public.contractors c on c.id = b.contractor_id
+    where c.profile_id = (select auth.uid())
+  )
+);
+
+create policy bid_documents_owner_write on public.bid_documents
+for insert to authenticated
+with check (
+  bid_id in (
+    select b.id from public.bids b
+    join public.contractors c on c.id = b.contractor_id
+    where c.profile_id = (select auth.uid())
+  )
+);
+
+create policy bid_responses_parties on public.bid_requirement_responses
+for all to authenticated
+using (
+  public.is_staff()
+  or bid_id in (
+    select b.id from public.bids b
+    join public.contractors c on c.id = b.contractor_id
+    where c.profile_id = (select auth.uid())
+  )
+)
+with check (
+  bid_id in (
+    select b.id from public.bids b
+    join public.contractors c on c.id = b.contractor_id
+    where c.profile_id = (select auth.uid())
+  )
+);
+
+create policy assignments_read on public.evaluator_assignments
+for select to authenticated
+using (evaluator_id = (select auth.uid()) or public.is_officer());
+
+create policy assignments_officer_write on public.evaluator_assignments
+for insert to authenticated
+with check (public.is_officer() and assigned_by = (select auth.uid()));
+
+create policy evaluations_access on public.evaluations
+for select to authenticated
+using (evaluator_id = (select auth.uid()) or public.is_officer());
+
+create policy evaluations_evaluator_write on public.evaluations
+for insert to authenticated
+with check (evaluator_id = (select auth.uid()));
+
+create policy evaluations_evaluator_update on public.evaluations
+for update to authenticated
+using (evaluator_id = (select auth.uid()))
+with check (evaluator_id = (select auth.uid()));
+
+create policy awards_read on public.awards
+for select to anon, authenticated
+using (
+  public.is_staff()
+  or tender_id in (
+    select t.id from public.tenders t
+    where t.status in ('awarded', 'completed')
+  )
+);
+
+create policy awards_officer_write on public.awards
+for insert to authenticated
+with check (public.is_officer() and awarded_by = (select auth.uid()));
+
+create policy projects_read on public.projects
+for select to anon, authenticated
+using (
+  public.is_staff()
+  or award_id in (
+    select a.id from public.awards a
+    join public.tenders t on t.id = a.tender_id
+    where t.status in ('awarded', 'completed')
+  )
+);
+
+create policy projects_officer_write on public.projects
+for insert to authenticated
+with check (public.is_officer());
+
+create policy projects_officer_update on public.projects
+for update to authenticated
+using (public.is_officer())
+with check (public.is_officer());
+
+create policy expenditure_read on public.expenditure
+for select to anon, authenticated
+using (
+  public.is_officer()
+  or project_id in (
+    select p.id from public.projects p
+    join public.awards a on a.id = p.award_id
+    join public.tenders t on t.id = a.tender_id
+    where t.status in ('awarded', 'completed')
+  )
+);
+
+create policy expenditure_officer_write on public.expenditure
+for insert to authenticated
+with check (public.is_officer() and created_by = (select auth.uid()));
+
 create policy notifications_own on public.notifications
 for select to authenticated
 using (user_id = (select auth.uid()));
 
--- Public projection.
-grant select on public.awarded_tenders_public to anon, authenticated;
+create policy notifications_own_update on public.notifications
+for update to authenticated
+using (user_id = (select auth.uid()))
+with check (user_id = (select auth.uid()));
 
--- Remaining table policies (documents, evaluations, awards, …) land with
--- the feature that first writes those tables. RLS is already ON so an
--- omitted policy fails closed (no access), which is the desired default.
+create policy audit_officer_select on public.audit_logs
+for select to authenticated
+using (public.is_officer());
+
+create policy audit_staff_insert on public.audit_logs
+for insert to authenticated
+with check (public.is_staff() and actor_id = (select auth.uid()));
+
+grant usage on schema public to anon, authenticated;
+grant select on public.published_tenders_public, public.awarded_tenders_public to anon, authenticated;
+grant select on public.tenders, public.tender_documents, public.tender_requirements,
+  public.contractors, public.awards, public.projects, public.expenditure to anon;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+revoke all on public.bids, public.evaluations, public.ai_analyses, public.evaluator_assignments, public.bid_documents, public.bid_requirement_responses from anon;
