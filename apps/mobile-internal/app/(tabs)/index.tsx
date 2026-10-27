@@ -185,7 +185,7 @@ export default function PipelineScreen() {
           {unscored.map((item) => (
             <Row
               key={item.id}
-              href={`/score/${item.id}`}
+              href={`/score/${item.bidId}`}
               title={item.contractor}
               meta="No score yet"
             />

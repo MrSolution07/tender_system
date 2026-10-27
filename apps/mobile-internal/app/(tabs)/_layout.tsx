@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Home,
   Lightbulb,
+  Users,
 } from "lucide-react-native";
 import { View, type ColorValue } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -111,6 +112,17 @@ export default function TabLayout() {
           href: role === "procurement_officer" ? null : undefined,
           tabBarIcon: ({ color, focused }) => (
             <TabGlyph icon={ClipboardList} color={color} focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="people"
+        options={{
+          title: "People",
+          tabBarAccessibilityLabel: "People",
+          href: role === "super_admin" ? undefined : null,
+          tabBarIcon: ({ color, focused }) => (
+            <TabGlyph icon={Users} color={color} focused={focused} />
           ),
         }}
       />

@@ -6,12 +6,15 @@ import { useParams } from "next/navigation";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { signedTenderUrl } from "@/lib/desk-ops";
 import { formatDate, formatRand } from "@/lib/format";
 import { useStore } from "@/lib/store";
+import { useState } from "react";
 
 export default function TenderDetailPage() {
   const params = useParams<{ id: string }>();
   const { ready, tenders } = useStore();
+  const [fileMessage, setFileMessage] = useState<string | null>(null);
   const tender = tenders.find(
     (item) => item.id === params.id && item.status === "published",
   );
@@ -95,6 +98,38 @@ export default function TenderDetailPage() {
               </li>
             ))}
           </ol>
+
+          <h2 className="mt-10 font-display text-2xl font-semibold">Documents</h2>
+          {tender.documents.length === 0 ? (
+            <p className="mt-3 text-muted-foreground">No files on this notice.</p>
+          ) : (
+            <ul className="mt-4 grid gap-3">
+              {tender.documents.map((document) => (
+                <li key={document.id}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11"
+                    onClick={() => {
+                      void signedTenderUrl(document.path).then((result) => {
+                        if (!result.url) {
+                          setFileMessage(result.error ?? "This file is listed but not stored yet.");
+                          return;
+                        }
+                        setFileMessage(null);
+                        window.open(result.url, "_blank", "noopener,noreferrer");
+                      });
+                    }}
+                  >
+                    {document.fileName}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {fileMessage ? (
+            <p className="mt-3 text-sm text-muted-foreground">{fileMessage}</p>
+          ) : null}
         </div>
 
         <aside

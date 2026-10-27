@@ -4,6 +4,7 @@ import type { DeskRole } from "@/lib/register";
 import { ROLE_LABEL } from "@/lib/labels";
 import { useStore } from "@/lib/store";
 import {
+  Bell,
   ChevronDown,
   ClipboardCheck,
   FileText,
@@ -12,8 +13,10 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  ScrollText,
   ShieldCheck,
   Sparkles,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -72,6 +75,24 @@ const NAV: NavItem[] = [
     icon: ClipboardCheck,
     roles: ["evaluator", "super_admin"],
   },
+  {
+    href: "/desk/notices",
+    label: "Notices",
+    icon: Bell,
+    roles: ["procurement_officer", "evaluator", "super_admin"],
+  },
+  {
+    href: "/desk/people",
+    label: "People",
+    icon: Users,
+    roles: ["super_admin"],
+  },
+  {
+    href: "/desk/audit",
+    label: "Audit",
+    icon: ScrollText,
+    roles: ["super_admin"],
+  },
 ];
 
 function homeFor(role: DeskRole): string {
@@ -80,9 +101,20 @@ function homeFor(role: DeskRole): string {
 
 function canSee(role: DeskRole, pathname: string): boolean {
   if (pathname === "/desk/sign-in") return true;
-  const match = NAV.find(
-    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+  // These pages explain themselves when the role cannot use them.
+  if (
+    pathname === "/desk/people" ||
+    pathname.startsWith("/desk/people/") ||
+    pathname === "/desk/audit"
+  ) {
+    return true;
+  }
+  const matches = NAV.filter((item) =>
+    item.href === "/desk"
+      ? pathname === "/desk"
+      : pathname === item.href || pathname.startsWith(`${item.href}/`),
   );
+  const match = matches.sort((left, right) => right.href.length - left.href.length)[0];
   if (!match) return true;
   return match.roles.includes(role);
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { StatusBadge } from "@/components/status-badge";
+import { TenderDesk } from "@/components/tender-desk";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -19,7 +20,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatRand } from "@/lib/format";
-import { TENDER_STATUS_LABEL } from "@/lib/labels";
 import { useStore } from "@/lib/store";
 
 const ACTION: Record<TenderStatus, string> = {
@@ -34,7 +34,7 @@ const ACTION: Record<TenderStatus, string> = {
 
 export default function DeskTenderPage() {
   const params = useParams<{ id: string }>();
-  const { tenders, reviews, session, setStatus } = useStore();
+  const { tenders, reviews, session, setStatus, reload } = useStore();
   const [statusError, setStatusError] = useState<string | null>(null);
   const tender = tenders.find((item) => item.id === params.id);
   const suggestion = tender
@@ -58,12 +58,25 @@ export default function DeskTenderPage() {
   const nextStatuses = TENDER_TRANSITIONS[current.status];
 
   async function move(status: TenderStatus) {
-    if (status === "published" && !current.closingAt) {
-      setStatusError("Add a closing date before publishing.");
+    if (status === "published") {
+      if (!current.closingAt) {
+        setStatusError("Add a closing date before publishing.");
+        return;
+      }
+      if (current.requirements.length === 0) {
+        setStatusError("Add a requirement before publishing.");
+        return;
+      }
+      if (current.documents.length === 0) {
+        setStatusError("Upload a pack file before publishing.");
+        return;
+      }
+    }
+    if (status === "awarded") {
+      setStatusError("Record the award from the bids section, with a winning bid.");
       return;
     }
-    const ok = await setStatus(current.id, status);
-    setStatusError(ok ? null : "That status change is not allowed from here.");
+    setStatusError(await setStatus(current.id, status));
   }
 
   return (
@@ -91,29 +104,12 @@ export default function DeskTenderPage() {
       </dl>
       <p className="mt-8 max-w-[65ch] text-pretty leading-7">{tender.description}</p>
 
-      <h2 className="mt-10 font-display text-2xl font-semibold">Requirements</h2>
-      {tender.requirements.length === 0 ? (
-        <p className="mt-3 text-muted-foreground">No requirements on this draft yet.</p>
-      ) : (
-        <ul className="mt-3 list-disc space-y-2 pl-5">
-          {tender.requirements.map((requirement) => (
-            <li key={requirement.id}>{requirement.body}</li>
-          ))}
-        </ul>
-      )}
-
-      <h2 className="mt-10 font-display text-2xl font-semibold">Documents</h2>
-      {tender.documents.length === 0 ? (
-        <p className="mt-3 text-muted-foreground">No files on this draft.</p>
-      ) : (
-        <ul className="mt-3 divide-y divide-border border-y border-border">
-          {tender.documents.map((document) => (
-            <li key={document.id} className="py-3 text-sm">
-              {document.fileName}
-            </li>
-          ))}
-        </ul>
-      )}
+      <TenderDesk
+        tender={current}
+        suggestion={suggestion}
+        canChange={canChange}
+        onChanged={reload}
+      />
 
       {suggestion ? (
         <section className="mt-10 border-y border-border py-6">
@@ -129,7 +125,7 @@ export default function DeskTenderPage() {
       {canChange ? (
         <div className="mt-8 flex flex-wrap gap-3">
           {nextStatuses
-            .filter((status) => status !== "archived")
+            .filter((status) => status !== "archived" && status !== "awarded")
             .map((status) => (
               <Button key={status} className="h-11" onClick={() => move(status)}>
                 {ACTION[status]}

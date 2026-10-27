@@ -1,4 +1,10 @@
-import type { AiReviewStatus, AppRole, ProjectStatus, TenderStatus } from "@tender/shared";
+import type {
+  AiReviewStatus,
+  AppRole,
+  ExtractedSuggestion,
+  ProjectStatus,
+  TenderStatus,
+} from "@tender/shared";
 
 export type DeskRole = Exclude<AppRole, "contractor">;
 
@@ -13,7 +19,7 @@ export type TenderRecord = {
   publishedAt: string | null;
   closingAt: string | null;
   requirements: { id: string; body: string; mandatory: boolean }[];
-  documents: { id: string; fileName: string }[];
+  documents: { id: string; fileName: string; path: string; kind: string; version: number }[];
 };
 
 export type ReviewRecord = {
@@ -22,6 +28,7 @@ export type ReviewRecord = {
   reviewStatus: AiReviewStatus;
   summary: string;
   model: string;
+  extracted: ExtractedSuggestion;
 };
 
 export type AwardRecord = {
