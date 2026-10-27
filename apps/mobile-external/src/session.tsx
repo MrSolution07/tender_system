@@ -16,6 +16,7 @@ type SessionValue = {
   session: Session | null;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
+  refresh: () => Promise<void>;
 };
 
 const SessionContext = createContext<SessionValue | null>(null);
@@ -77,6 +78,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut();
         setSession(null);
       },
+      refresh: load,
     }),
     [ready, session],
   );

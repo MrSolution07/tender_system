@@ -2,47 +2,47 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 
 import { Body, Field, FormError, PrimaryButton, QuietButton, Screen, Title } from "@/src/kit";
-import { loadEvaluations, saveScore, type DeskEvaluation } from "@/src/queries";
+import { loadScoreBoard, saveScoreForBid, type ScoreCard } from "@/src/operate";
 
 export default function ScoreScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [evaluation, setEvaluation] = useState<DeskEvaluation | null | undefined>(undefined);
+  const [card, setCard] = useState<ScoreCard | null | undefined>(undefined);
   const [score, setScore] = useState("");
   const [comments, setComments] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (typeof id !== "string") {
-      setEvaluation(null);
+      setCard(null);
       return;
     }
-    void loadEvaluations().then((rows) => {
-      const found = rows.find((item) => item.id === id) ?? null;
-      setEvaluation(found);
+    void loadScoreBoard().then((rows) => {
+      const found = rows.find((item) => item.bidId === id) ?? null;
+      setCard(found);
       setScore(found?.score === null || found?.score === undefined ? "" : String(found.score));
       setComments(found?.comments ?? "");
     });
   }, [id]);
 
-  if (!evaluation) {
+  if (!card) {
     return (
       <Screen>
-        <Title>{evaluation === undefined ? "Loading the score." : "Score not found"}</Title>
+        <Title>{card === undefined ? "Loading the score." : "Score not found"}</Title>
         <QuietButton label="Back to scores" href="/scores" />
       </Screen>
     );
   }
 
-  const current = evaluation;
+  const current = card;
   async function save() {
     const value = Number(score);
-    if (!Number.isFinite(value)) {
-      setError("Enter a numeric score.");
+    if (!Number.isInteger(value) || value < 0 || value > 100) {
+      setError("Enter a whole score from 0 to 100.");
       return;
     }
-    const ok = await saveScore(current.id, value, comments);
-    if (!ok) {
-      setError("Could not save the score.");
+    const message = await saveScoreForBid(current.bidId, value, comments);
+    if (message) {
+      setError(message);
       return;
     }
     router.replace("/held?kind=score");
@@ -51,8 +51,8 @@ export default function ScoreScreen() {
   return (
     <Screen>
       <Stack.Screen options={{ title: "Score" }} />
-      <Title>{evaluation.contractor}</Title>
-      <Body>{evaluation.title}</Body>
+      <Title>{card.contractor}</Title>
+      <Body>{card.title}</Body>
       <Body>Scores stay on the desk.</Body>
       <Field label="Score" value={score} onChangeText={setScore} />
       <Field label="Comments" value={comments} onChangeText={setComments} multiline />

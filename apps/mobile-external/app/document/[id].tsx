@@ -12,12 +12,12 @@ export default function DocumentScreen() {
   const [error, setError] = useState("");
 
   async function open() {
-    const url = await openDocument(path);
-    if (!url) {
-      setError("File could not be opened.");
+    const result = await openDocument(path);
+    if (!result.url) {
+      setError(result.error);
       return;
     }
-    await Linking.openURL(url);
+    await Linking.openURL(result.url);
   }
 
   return (

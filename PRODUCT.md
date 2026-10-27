@@ -13,9 +13,10 @@ Next.js App Router, Tailwind, shadcn/ui on Radix, pnpm workspace. Confirmed in `
 ## Users
 
 - Public visitors read awarded and published procurement notices. No account.
-- Procurement officers draft tenders, move status, and review AI suggestions at a desk.
+- Procurement officers draft tenders, add requirements and pack files, move status, and review AI suggestions at a desk.
 - Evaluators score assigned bids. Scores stay off the public site.
-- Super admins see the same desk as officers in this preview.
+- Super admins use the same desk, and also create accounts, set roles, and read the audit log.
+- Contractors sign in on the external app, attach bid files, and submit while a notice is open.
 
 ## Product Purpose
 
@@ -34,9 +35,10 @@ South African public procurement. Currency is ZAR. Status path is draft, publish
 - Status values and `canTransition` come from `@tender/shared`.
 - Public pages omit bids, scores, evaluator comments, AI drafts, and official contact details.
 - Approving an AI suggestion does not rewrite closing dates, requirements, or criteria.
-- Desk sign-in is a local preview session, not Supabase Auth.
-- No service-role key. No custom REST API.
-- Live Auth and schema are not in this pass.
+- Desk and mobile sign-in use Supabase Auth. Roles come from `profiles`.
+- A super admin creates accounts through an Edge Function. The service role stays on that function.
+- No service-role key in a client bundle. No custom REST API.
+- Approving an AI suggestion still does not rewrite official tender fields. An officer can copy extracted lines only after the suggestion is approved or corrected, and only when those lines exist.
 
 ## Brand Commitments
 

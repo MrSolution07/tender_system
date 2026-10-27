@@ -2,6 +2,7 @@ import type {
   AiReviewStatus,
   AppRole,
   ProjectStatus,
+  TenderDocumentKind,
   TenderStatus,
 } from "@tender/shared";
 
@@ -28,6 +29,13 @@ export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
   in_progress: "In progress",
   delayed: "Delayed",
   completed: "Completed",
+};
+
+export const DOCUMENT_KIND_LABEL: Record<TenderDocumentKind, string> = {
+  specification: "Specification",
+  addendum: "Addendum",
+  form: "Form",
+  supporting: "Supporting",
 };
 
 export const ROLE_LABEL: Record<AppRole, string> = {

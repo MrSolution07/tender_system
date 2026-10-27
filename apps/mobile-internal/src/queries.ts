@@ -1,4 +1,4 @@
-import type { TenderStatus } from "@tender/shared";
+import { parseExtracted, type ExtractedSuggestion, type TenderStatus } from "@tender/shared";
 
 import { supabase } from "@/src/supabase";
 
@@ -22,10 +22,12 @@ export type DeskReview = {
   reviewStatus: string;
   summary: string;
   model: string;
+  extracted: ExtractedSuggestion;
 };
 
 export type DeskEvaluation = {
   id: string;
+  bidId: string;
   tenderId: string;
   title: string;
   contractor: string;
@@ -70,7 +72,7 @@ export function watchRegister(onChange: () => void): () => void {
     timer = setTimeout(onChange, 200);
   };
   const channel = client.channel(`desk-register-${(watchSeq += 1)}`);
-  for (const table of ["tenders", "bids", "evaluations", "ai_analyses"]) {
+  for (const table of ["tenders", "tender_documents", "bids", "evaluations", "ai_analyses"]) {
     channel.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
   }
   channel.subscribe();
@@ -113,7 +115,7 @@ export async function loadReviews(): Promise<DeskReview[]> {
   if (!supabase) return [];
   const { data } = await supabase
     .from("ai_analyses")
-    .select("id,tender_id,review_status,summary,model,tenders(title)");
+    .select("id,tender_id,review_status,summary,model,extracted,tenders(title)");
   return rows(data).flatMap((row) => {
     if (typeof row.id !== "string" || typeof row.tender_id !== "string") return [];
     const tender = one(row.tenders);
@@ -124,6 +126,7 @@ export async function loadReviews(): Promise<DeskReview[]> {
       reviewStatus: text(row.review_status),
       summary: text(row.summary),
       model: text(row.model, "document-extractor"),
+      extracted: parseExtracted(row.extracted),
     }];
   });
 }
@@ -132,15 +135,16 @@ export async function loadEvaluations(): Promise<DeskEvaluation[]> {
   if (!supabase) return [];
   const { data } = await supabase
     .from("evaluations")
-    .select("id,score,comments,bids(tender_id,tenders(title),contractors(company_name))");
+    .select("id,bid_id,score,comments,bids(tender_id,tenders(title),contractors(company_name))");
   return rows(data).flatMap((row) => {
-    if (typeof row.id !== "string") return [];
+    if (typeof row.id !== "string" || typeof row.bid_id !== "string") return [];
     const bid = one(row.bids);
     const tender = one(bid?.tenders);
     const contractor = one(bid?.contractors);
     if (!bid || typeof bid.tender_id !== "string") return [];
     return [{
       id: row.id,
+      bidId: row.bid_id,
       tenderId: bid.tender_id,
       title: text(tender?.title, "Tender"),
       contractor: text(contractor?.company_name, "Contractor"),
@@ -179,10 +183,11 @@ export async function saveDraft(input: {
   return data.id;
 }
 
-export async function setTenderStatus(id: string, status: TenderStatus): Promise<boolean> {
-  if (!supabase) return false;
+export async function setTenderStatus(id: string, status: TenderStatus): Promise<string | null> {
+  if (!supabase) return "The register is not configured.";
   const { error } = await supabase.from("tenders").update({ status }).eq("id", id);
-  return !error;
+  if (!error) return null;
+  return error.message || "That status change is not allowed from here.";
 }
 
 export async function setReviewStatus(id: string, status: "approved" | "corrected"): Promise<boolean> {

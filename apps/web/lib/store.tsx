@@ -2,6 +2,7 @@
 
 import {
   canTransition,
+  parseExtracted,
   TENDER_STATUSES,
   type AiReviewStatus,
   type ProjectStatus,
@@ -37,7 +38,8 @@ type StoreValue = {
   session: DeskSession | null;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
-  setStatus: (tenderId: string, status: TenderStatus) => Promise<boolean>;
+  reload: () => Promise<void>;
+  setStatus: (tenderId: string, status: TenderStatus) => Promise<string | null>;
   createTender: (input: {
     title: string;
     description: string;
@@ -126,7 +128,13 @@ function mapTender(row: Record<string, unknown>): TenderRecord | null {
     ),
     documents: many(row.tender_documents).flatMap((item) =>
       typeof item.id === "string"
-        ? [{ id: item.id, fileName: text(item.file_name) }]
+        ? [{
+            id: item.id,
+            fileName: text(item.file_name),
+            path: text(item.storage_path),
+            kind: text(item.kind),
+            version: num(item.version) || 1,
+          }]
         : [],
     ),
   };
@@ -141,6 +149,7 @@ function mapReview(row: Record<string, unknown>): ReviewRecord | null {
     reviewStatus: row.review_status,
     summary: text(row.summary),
     model: text(row.model, "document-extractor"),
+    extracted: parseExtracted(row.extracted),
   };
 }
 
@@ -218,9 +227,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const [tenderRes, reviewRes, awardRes, evaluationRes] = await Promise.all([
       supabase
         .from("tenders")
-        .select("id,title,description,category,department,budget_cents,status,published_at,closing_at,tender_requirements(id,body,mandatory),tender_documents(id,file_name)")
+        .select("id,title,description,category,department,budget_cents,status,published_at,closing_at,tender_requirements(id,body,mandatory),tender_documents(id,file_name,storage_path,kind,version)")
         .order("closing_at", { ascending: true }),
-      supabase.from("ai_analyses").select("id,tender_id,review_status,summary,model"),
+      supabase.from("ai_analyses").select("id,tender_id,review_status,summary,model,extracted"),
       supabase
         .from("awards")
         .select("id,tender_id,awarded_at,contractors(company_name),projects(title,status,progress_percent,location_label,expenditure(id,description,amount_cents))"),
@@ -261,7 +270,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }, 200);
     };
     const channel = supabase.channel("register");
-    for (const table of ["tenders", "awards", "projects", "expenditure", "bids", "evaluations", "ai_analyses"]) {
+    for (const table of ["tenders", "tender_documents", "awards", "projects", "expenditure", "bids", "evaluations", "ai_analyses"]) {
       channel.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
     }
     channel.subscribe();
@@ -284,6 +293,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       awards,
       evaluations,
       session,
+      reload: load,
       signIn: async (email, password) => {
         if (!supabase) return "The register is not configured.";
         const { error: signError } = await supabase.auth.signInWithPassword({
@@ -301,14 +311,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       setStatus: async (tenderId, status) => {
         const tender = tenders.find((item) => item.id === tenderId);
-        if (!tender || !canTransition(tender.status, status) || !supabase) return false;
+        if (!supabase) return "The register is not configured.";
+        if (!tender || !canTransition(tender.status, status)) {
+          return "That status change is not allowed from here.";
+        }
         const { error: updateError } = await supabase
           .from("tenders")
           .update({ status })
           .eq("id", tenderId);
-        if (updateError) return false;
+        if (updateError) {
+          return updateError.message || "That status change is not allowed from here.";
+        }
         await load();
-        return true;
+        return null;
       },
       createTender: async (input) => {
         if (!supabase) throw new Error("The register is not configured.");

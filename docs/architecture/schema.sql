@@ -466,10 +466,20 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  bid_tender uuid;
+  bid_contractor uuid;
 begin
-  select b.contractor_id into new.contractor_id
+  select b.tender_id, b.contractor_id into bid_tender, bid_contractor
   from public.bids b
   where b.id = new.bid_id;
+  if bid_tender is null then
+    raise exception 'Award needs a bid that is on the register';
+  end if;
+  if bid_tender is distinct from new.tender_id then
+    raise exception 'That bid belongs to a different tender';
+  end if;
+  new.contractor_id := bid_contractor;
   return new;
 end;
 $$;
@@ -543,6 +553,14 @@ $$;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_user();
+
+-- If a role arrives after insert (dashboard edits), create the missing profile.
+-- This function does not write back to auth.users.
+create trigger on_auth_user_role_set
+after update of raw_app_meta_data on auth.users
+for each row
+when (new.raw_app_meta_data->>'role' is distinct from old.raw_app_meta_data->>'role')
+execute function public.handle_new_user();
 
 revoke all on function public.handle_new_user() from public;
 revoke all on function public.copy_award_contractor() from public;
