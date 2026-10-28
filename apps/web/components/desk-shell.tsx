@@ -14,6 +14,7 @@ import {
   Menu,
   ShieldCheck,
   Sparkles,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -72,17 +73,30 @@ const NAV: NavItem[] = [
     icon: ClipboardCheck,
     roles: ["evaluator", "super_admin"],
   },
+  {
+    href: "/desk/users",
+    label: "Users",
+    icon: Users,
+    roles: ["super_admin"],
+  },
 ];
 
 function homeFor(role: DeskRole): string {
   return role === "evaluator" ? "/desk/evaluations" : "/desk";
 }
 
+function matchingNav(pathname: string): NavItem | undefined {
+  const hits = NAV.filter((item) =>
+    item.href === "/desk"
+      ? pathname === "/desk"
+      : pathname === item.href || pathname.startsWith(`${item.href}/`),
+  );
+  return hits.sort((left, right) => right.href.length - left.href.length)[0];
+}
+
 function canSee(role: DeskRole, pathname: string): boolean {
   if (pathname === "/desk/sign-in") return true;
-  const match = NAV.find(
-    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
-  );
+  const match = matchingNav(pathname);
   if (!match) return true;
   return match.roles.includes(role);
 }
